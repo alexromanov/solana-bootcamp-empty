@@ -15,7 +15,7 @@ import { TokenFilter } from "@/components/TokenFilter";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { Button } from "@/components/ui/button";
 import { useTokenBalances } from "@/hooks/useTokenBalances";
-import { useMultipleMetadata } from "@/hooks/useMetadata";
+import { useMultipleEnhancedMetadata } from "@/hooks/useEnhancedMetadata";
 
 export function TokenBalancesPage({
   isWalletConnected,
@@ -28,7 +28,7 @@ export function TokenBalancesPage({
   const [filterQuery, setFilterQuery] = useState("");
   
   // Get metadata for all tokens to enable filtering by name/symbol
-  const { data: tokensMetadata } = useMultipleMetadata(
+  const { data: tokensMetadata } = useMultipleEnhancedMetadata(
     tokenBalances.map((t) => t.mint)
   );
   

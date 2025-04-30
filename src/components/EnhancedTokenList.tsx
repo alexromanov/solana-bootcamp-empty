@@ -1,4 +1,4 @@
-import { useMultipleMetadata, formatTokenAmount } from '@/hooks/useMetadata';
+import { useMultipleEnhancedMetadata, formatTokenAmount } from '@/hooks/useEnhancedMetadata';
 
 interface TokenBalance {
   mint: string;
@@ -11,7 +11,7 @@ interface TokenListProps {
 }
 
 export function EnhancedTokenList({ tokens }: TokenListProps) {
-  const { data: tokensMetadata, isLoading } = useMultipleMetadata(
+  const { data: tokensMetadata, isLoading } = useMultipleEnhancedMetadata(
     tokens.map((t) => t.mint),
   );
 
