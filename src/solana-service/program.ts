@@ -8,11 +8,10 @@ import { config } from "./config";
 
 import {
   getAssociatedTokenAddressSync,
-  TOKEN_PROGRAM_ID
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID
 } from "@solana/spl-token";
 import { randomBytes } from "crypto";
-
-const TOKEN_PROGRAM = TOKEN_PROGRAM_ID;
 
 export class EscrowProgram {
   protected program: Program<Escrow>;
@@ -45,58 +44,79 @@ export class EscrowProgram {
     tokenAmountA: number,
     tokenAmountB: number
   ) {
+    // Get account info for both token mints to determine program ID
+    const [accountInfoA, accountInfoB] = await Promise.all([
+      this.connection.getAccountInfo(tokenMintA),
+      this.connection.getAccountInfo(tokenMintB),
+    ]);
+    
+    if (!accountInfoA || !accountInfoB) {
+      throw new Error('Token mint accounts not found');
+    }
+    
+    // Get program IDs
+    const programIdA = accountInfoA.owner;
+    const programIdB = accountInfoB.owner;
+    
+    // Ensure they're both valid token program IDs
+    const validProgramIds = [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID];
+    if (!validProgramIds.some(id => id.equals(programIdA)) || 
+        !validProgramIds.some(id => id.equals(programIdB))) {
+      throw new Error('Invalid token mints provided');
+    }
+    
+    // Check if both tokens use the same program
+    if (!programIdA.equals(programIdB)) {
+      throw new Error('Both tokens must use the same token program standard');
+    }
+    
+    // Use the common token program ID
+    const tokenProgram = programIdA;
+    
     const offerId = new BN(randomBytes(8));
     const offerAddress = this.createOfferId(offerId);
-
+    
     const vault = getAssociatedTokenAddressSync(
       tokenMintA,
       offerAddress,
       true,
-      TOKEN_PROGRAM
+      tokenProgram
     );
-
+    
     const makerTokenAccountA = getAssociatedTokenAddressSync(
       tokenMintA,
       this.wallet.publicKey,
       true,
-      TOKEN_PROGRAM
+      tokenProgram
     );
-
-    const makerTokenAccountB = getAssociatedTokenAddressSync(
-      tokenMintB,
-      this.wallet.publicKey,
-      true,
-      TOKEN_PROGRAM
-    );
-
+    
     const accounts = {
       maker: this.wallet.publicKey,
       tokenMintA: tokenMintA,
       makerTokenAccountA,
       tokenMintB: tokenMintB,
-      makerTokenAccountB,
       vault,
       offer: offerAddress,
     };
-
+    
     const txInstruction = await this.program.methods
       .makeOffer(offerId, new BN(tokenAmountA), new BN(tokenAmountB))
-      .accounts({...accounts, tokenProgram: TOKEN_PROGRAM})
+      .accounts({...accounts, tokenProgram})
       .instruction();
-
+    
     const messageV0 = new web3.TransactionMessage({
         payerKey: this.wallet.publicKey,
         recentBlockhash: (await this.connection.getLatestBlockhash()).blockhash,
         instructions: [txInstruction]
     }).compileToV0Message();
-
+    
     const versionedTransaction = new web3.VersionedTransaction(messageV0);
-
+    
     if (!this.program.provider.sendAndConfirm) return;
-
+    
     const response = await this.program.provider.sendAndConfirm(versionedTransaction);
     if (!this.program.provider.publicKey) return;
-
+    
     return response;
   }
 
@@ -106,34 +126,62 @@ export class EscrowProgram {
     tokenMintA: PublicKey,
     tokenMintB: PublicKey
   ) {
+    const [accountInfoA, accountInfoB] = await Promise.all([
+      this.connection.getAccountInfo(tokenMintA),
+      this.connection.getAccountInfo(tokenMintB),
+    ]);
+    
+    if (!accountInfoA || !accountInfoB) {
+      throw new Error('Token mint accounts not found');
+    }
+    
+    // Get program IDs
+    const programIdA = accountInfoA.owner;
+    const programIdB = accountInfoB.owner;
+    
+    // Ensure they're both valid token program IDs
+    const validProgramIds = [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID];
+    if (!validProgramIds.some(id => id.equals(programIdA)) || 
+        !validProgramIds.some(id => id.equals(programIdB))) {
+      throw new Error('Invalid token mints provided');
+    }
+    
+    // Check if both tokens use the same program
+    if (!programIdA.equals(programIdB)) {
+      throw new Error('Both tokens must use the same token program standard');
+    }
+    
+    // Use the common token program ID
+    const tokenProgram = programIdA;
+    
     const takerTokenAccountA = getAssociatedTokenAddressSync(
       tokenMintA,
       this.wallet.publicKey,
       true,
-      TOKEN_PROGRAM
+      tokenProgram
     );
-
+    
     const takerTokenAccountB = getAssociatedTokenAddressSync(
       tokenMintB,
       this.wallet.publicKey,
       true,
-      TOKEN_PROGRAM
+      tokenProgram
     );
-
+    
     const makerTokenAccountB = getAssociatedTokenAddressSync(
       tokenMintB,
-      this.wallet.publicKey,
+      maker,
       true,
-      TOKEN_PROGRAM
+      tokenProgram
     );
-
+    
     const vault = getAssociatedTokenAddressSync(
       tokenMintA,
       offer,
       true,
-      TOKEN_PROGRAM
+      tokenProgram
     );
-
+    
     const accounts = {
       maker,
       offer,
@@ -141,28 +189,28 @@ export class EscrowProgram {
       takerTokenAccountA,
       takerTokenAccountB,
       vault,
-      tokenProgram: TOKEN_PROGRAM,
+      tokenProgram,
       makerTokenAccountB,
     };
-
+    
     const txInstruction = await this.program.methods
       .takeOffer()
       .accounts({...accounts})
       .instruction();
-
+    
     const messageV0 = new web3.TransactionMessage({
         payerKey: this.wallet.publicKey,
         recentBlockhash: (await this.connection.getLatestBlockhash()).blockhash,
         instructions: [txInstruction],
       }).compileToV0Message();
-
+    
     const versionedTransaction = new web3.VersionedTransaction(messageV0);
-
+    
     if (!this.program.provider.sendAndConfirm) return;
-
+    
     const response = await this.program.provider.sendAndConfirm(versionedTransaction);
     if (!this.program.provider.publicKey) return;
-
+    
     return response;
   }
 }
